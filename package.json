@@ -1,0 +1,14 @@
+{
+  "name": "hydraterm",
+  "version": "0.0.1",
+  "description": "A Bun-native terminal process dashboard with real VT fidelity. Work in progress — not yet functional.",
+  "module": "index.ts",
+  "type": "module",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  }
+}
