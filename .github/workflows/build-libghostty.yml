@@ -1,0 +1,58 @@
+name: build-libghostty
+
+# Maintainer-only: builds the prebuilt libghostty-vt.dylib that ships to end
+# users, then commits it into native/darwin-arm64/. Runs on a macOS 15 runner
+# (arm64) because ghostty requires Zig 0.15.x, whose self-build can't target a
+# macOS 26 host — see scripts/build-libghostty.ts. Trigger manually.
+on:
+  workflow_dispatch:
+    inputs:
+      commit:
+        description: "Commit the built .dylib back to the branch"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    # macos-15 is Apple Silicon (arm64) and old enough for Zig 0.15.2 to link.
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      # Downloads its own pinned Zig 0.15.2 and the pinned ghostty commit,
+      # builds the shared lib, and stages it into native/darwin-arm64/.
+      - name: Build libghostty-vt.dylib
+        run: bun run scripts/build-libghostty.ts
+
+      - name: Sanity-check the artifact
+        run: |
+          file native/darwin-arm64/libghostty-vt.dylib
+          # Confirm the symbols our bun:ffi layer binds against are exported.
+          nm -gU native/darwin-arm64/libghostty-vt.dylib | grep -E \
+            'ghostty_terminal_new|ghostty_terminal_vt_write|ghostty_formatter_format_alloc' \
+            || (echo "expected exports missing" && exit 1)
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: libghostty-vt-darwin-arm64
+          path: native/darwin-arm64/
+
+      - name: Commit prebuilt binary
+        if: ${{ inputs.commit }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -f native/darwin-arm64/
+          if git diff --cached --quiet; then
+            echo "No change to the prebuilt binary."
+          else
+            git commit -m "build: prebuilt libghostty-vt.dylib (darwin-arm64)"
+            git push
+          fi

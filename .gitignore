@@ -32,3 +32,7 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 
 # Finder (MacOS) folder config
 .DS_Store
+
+# libghostty-vt maintainer build (not shipped; end users get prebuilt .dylib in native/)
+vendor/
+.build-libghostty/
