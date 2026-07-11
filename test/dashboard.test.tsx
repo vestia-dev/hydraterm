@@ -1,0 +1,155 @@
+/** @jsxImportSource @opentui/react */
+import { expect, test } from "bun:test";
+import { type ScrollBoxRenderable } from "@opentui/core";
+import { testRender } from "@opentui/react/test-utils";
+import { act } from "react";
+import { DashboardView } from "../src/dashboard";
+import type { ProcessStatus, TerminalSession } from "../src/session";
+
+class FakeSession implements TerminalSession {
+  status: ProcessStatus = "idle";
+  exitCode: number | null = null;
+  readonly inputs: string[] = [];
+  readonly sizes: Array<[number, number]> = [];
+  starts = 0;
+  stops = 0;
+  restarts = 0;
+  #screen = "ready";
+  #listeners = new Set<() => void>();
+
+  constructor(readonly name: string, readonly command: readonly string[]) {}
+
+  snapshot(): string {
+    return this.#screen;
+  }
+
+  start(): void {
+    if (this.status === "running") return;
+    this.starts++;
+    this.status = "running";
+  }
+  restart(): void {
+    this.restarts++;
+    this.status = "idle";
+    this.exitCode = null;
+    this.start();
+  }
+  stop(): void {
+    if (this.status !== "running") return;
+    this.stops++;
+    this.status = "stopped";
+  }
+  dispose(): void {}
+
+  send(input: string | Uint8Array): void {
+    this.inputs.push(typeof input === "string" ? input : new TextDecoder().decode(input));
+  }
+
+  resize(cols: number, rows: number): void {
+    this.sizes.push([cols, rows]);
+  }
+
+  subscribe(listener: () => void): () => void {
+    this.#listeners.add(listener);
+    return () => this.#listeners.delete(listener);
+  }
+
+  setScreen(screen: string): void {
+    this.#screen = screen;
+    for (const listener of this.#listeners) listener();
+  }
+}
+
+test("React dashboard uses j/k navigation and routes focused output input to the selected pane", async () => {
+  const first = new FakeSession("api", ["api"]);
+  const second = new FakeSession("web", ["web"]);
+  let quit = false;
+  const setup = await testRender(<DashboardView sessions={[first, second]} onQuit={() => { quit = true; }} />, {
+    width: 80,
+    height: 20,
+    exitOnCtrlC: false,
+    kittyKeyboard: true,
+  });
+
+  try {
+    await setup.flush();
+    expect(setup.captureCharFrame()).toContain("hydraterm");
+    expect(setup.captureCharFrame()).toContain("ready");
+    await act(async () => {
+      setup.mockInput.pressKey("a");
+    });
+    expect(first.starts).toBe(1);
+    expect(second.starts).toBe(1);
+
+    await act(async () => {
+      setup.mockInput.pressKey("j");
+    });
+    await setup.flush();
+    expect(first.starts).toBe(1);
+    expect(second.starts).toBe(1);
+    second.status = "failed";
+    second.exitCode = 1;
+    await act(async () => {
+      setup.mockInput.pressKey("r");
+    });
+    expect(second.restarts).toBe(1);
+    expect(second.starts).toBe(2);
+    await act(async () => {
+      setup.mockInput.pressKey("s");
+    });
+    expect(second.stops).toBe(1);
+    expect(second.status as ProcessStatus).toBe("stopped");
+    await act(async () => {
+      setup.mockInput.pressKey("s");
+    });
+    expect(second.starts).toBe(3);
+    await act(async () => {
+      setup.mockInput.pressEnter();
+    });
+    await setup.flush();
+    await act(async () => {
+      await setup.mockInput.typeText("x");
+    });
+    expect(first.inputs).toEqual([]);
+    expect(second.inputs).toEqual(["x"]);
+
+    const history = Array.from({ length: 60 }, (_, index) => `server line ${index}`).join("\n");
+    await act(async () => {
+      second.setScreen(history);
+    });
+    await setup.flush();
+    expect(setup.captureCharFrame()).toContain("server line 59");
+
+    const output = setup.renderer.root.findDescendantById("process-output") as ScrollBoxRenderable;
+    expect(output.scrollHeight).toBeGreaterThan(output.viewport.height);
+    const bottom = output.scrollTop;
+    await act(async () => {
+      setup.mockInput.pressKey("k");
+    });
+    await setup.flush();
+    expect(output.scrollTop).toBeLessThan(bottom);
+
+    await act(async () => {
+      setup.mockInput.pressCtrlC();
+    });
+    expect(second.inputs).toEqual(["x", "\x03"]);
+
+    await act(async () => {
+      setup.mockInput.pressEscape();
+    });
+    await setup.flush();
+    await act(async () => {
+      setup.mockInput.pressKey("p");
+    });
+    expect(first.stops).toBe(1);
+    expect(second.stops).toBe(2);
+    await act(async () => {
+      setup.mockInput.pressKey("q");
+    });
+    expect(quit).toBe(true);
+  } finally {
+    await act(async () => {
+      setup.renderer.destroy();
+    });
+  }
+});
