@@ -1,0 +1,66 @@
+name: release
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  publish:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: macos-15
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      # npm 11.5.1+ exchanges the GitHub Actions OIDC token for a short-lived
+      # npm credential. Bun still handles the project's install and build.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - run: bun install --frozen-lockfile
+
+      - run: bun test
+
+      - name: Bump the patch version
+        id: version
+        run: |
+          VERSION=$(bun -e 'const { version } = await Bun.file("package.json").json(); const parts = version.split(".").map(Number); if (parts.length !== 3 || parts.some((part) => !Number.isSafeInteger(part) || part < 0)) throw new Error(`Expected a stable semantic version, received ${version}.`); console.log(`${parts[0]}.${parts[1]}.${parts[2] + 1}`)')
+          bun pm pkg set version="$VERSION"
+          echo "value=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - run: bun run build
+
+      - name: Publish to npm with OIDC
+        run: npm publish --access public --ignore-scripts
+
+      - name: Commit and tag the release
+        env:
+          VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add package.json bin/hydraterm
+          git commit -m "chore(release): v$VERSION"
+          git tag "v$VERSION"
+          git push origin HEAD:main --follow-tags
+
+      - name: Create GitHub release
+        env:
+          VERSION: ${{ steps.version.outputs.value }}
+        run: gh release create "v$VERSION" --generate-notes

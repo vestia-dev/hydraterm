@@ -1,11 +1,17 @@
 import { dlopen, JSCallback, ptr, read, toArrayBuffer, type Pointer } from "bun:ffi";
+import { dirname, resolve } from "node:path";
 
 /** The public libghostty-vt result codes used by this wrapper. */
 const GHOSTTY_SUCCESS = 0;
 const GHOSTTY_OUT_OF_SPACE = -3;
 const GHOSTTY_TERMINAL_OPT_WRITE_PTY = 1;
 
-const libraryPath = new URL("../native/darwin-arm64/libghostty-vt.dylib", import.meta.url).pathname;
+const bundledLibraryPath = "native/darwin-arm64/libghostty-vt.dylib";
+const libraryPath = import.meta.url.includes("/$bunfs/")
+  // Compiled executables run their bundled code from Bun's virtual filesystem.
+  // The native library remains next to the installed package on disk.
+  ? resolve(dirname(process.execPath), "..", bundledLibraryPath)
+  : new URL(`../${bundledLibraryPath}`, import.meta.url).pathname;
 
 if (process.platform !== "darwin" || process.arch !== "arm64") {
   throw new Error(

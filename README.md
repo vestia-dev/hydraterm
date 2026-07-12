@@ -18,7 +18,7 @@ On first run, Hydraterm discovers every root and workspace script, presents a pi
 then saves the selection as named processes in the root `package.json`:
 
 ```bash
-bun run index.ts
+hydraterm
 ```
 
 After configuration exists, Hydraterm starts its auto-starting processes. Pass a process
@@ -27,9 +27,9 @@ name to start only that process, or use `--all` to start every configured proces
 while `--watch-debounce <ms>` changes the default 150ms debounce.
 
 ```bash
-bun run index.ts --all
-bun run index.ts API
-bun run index.ts --watch-debounce 300 API
+hydraterm --all
+hydraterm API
+hydraterm --watch-debounce 300 API
 ```
 
 The first-run picker lists all discovered scripts, including lifecycle hooks and linting
@@ -70,7 +70,7 @@ to `false`.
 }
 ```
 
-Run one configured process by name, for example `bun run index.ts API`. Use `--all` to
+Run one configured process by name, for example `hydraterm API`. Use `--all` to
 start every configured process.
 
 `restartWhenChanged` glob patterns are the complete watch declaration for a configured
@@ -91,9 +91,40 @@ Run the automated proof:
 bun test
 ```
 
+## Installation
+
+Install it globally with either package manager, then run `hydraterm` from a project:
+
+```bash
+npm install --global hydraterm
+# or
+bun install --global hydraterm
+```
+
+Run it once without a global installation:
+
+```bash
+npx hydraterm
+# or
+bunx hydraterm
+```
+
 ## Platform support
 
 v1 currently targets macOS on Apple Silicon only. The npm package declares
-this restriction so it cannot install silently on an unsupported platform.
+this restriction so it cannot install silently on an unsupported platform. It
+ships a standalone executable, so npm/npx users do not need Bun installed.
+
+## Releases
+
+Every non-bot push to `main` creates the next patch release, publishes it to npm,
+tags the release, and creates a GitHub Release. Publishing uses npm trusted publishing
+with GitHub Actions OIDC, so no npm token is stored in GitHub.
+
+Configure the `hydraterm` package's trusted publisher in npm before merging the
+workflow: select GitHub Actions, enter organization `vestia-dev`, repository
+`hydraterm`, workflow filename `release.yml`, and allow `npm publish`. The package must
+already exist on npm to configure a trusted publisher; bootstrap its first publication
+manually if necessary.
 
 This project was created using `bun init` in bun v1.3.11. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.

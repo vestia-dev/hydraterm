@@ -2,13 +2,15 @@
   "name": "hydraterm",
   "version": "0.0.1",
   "description": "A Bun-native terminal process dashboard with real VT fidelity. Early work in progress.",
-  "module": "index.ts",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vestia-dev/hydraterm.git"
+  },
   "bin": {
-    "hydraterm": "./index.ts"
+    "hydraterm": "./bin/hydraterm"
   },
   "files": [
-    "index.ts",
-    "src",
+    "bin/hydraterm",
     "native/darwin-arm64/libghostty-vt.dylib",
     "README.md"
   ],
@@ -17,7 +19,9 @@
   "cpu": ["arm64"],
   "license": "MIT",
   "scripts": {
+    "build": "bun build --compile --outfile bin/hydraterm index.ts",
     "demo:spinner": "i=0; while [ $i -lt 20 ]; do printf '\\r\\033[2K⠋ Building'; sleep 0.05; printf '\\r\\033[2K⠹ Done'; sleep 0.05; i=$((i + 1)); done; printf '\\n'",
+    "prepublishOnly": "bun run build",
     "test": "bun test",
     "typecheck": "tsc --noEmit"
   },
