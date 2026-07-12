@@ -47,10 +47,8 @@ jobs:
 
       - run: bun run build
 
-      - name: Publish to npm
+      - name: Publish to npm (OIDC trusted publisher)
         run: npm publish --access public --ignore-scripts --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Commit and tag the release
         env:
