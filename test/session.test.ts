@@ -69,3 +69,19 @@ test("runs configured process commands through a shell with their environment", 
     session.dispose();
   }
 });
+
+test("forwards Ghostty query responses to the child PTY", async () => {
+  const session = new PtySession(
+    "device-attributes",
+    ["/bin/sh", "-c", "stty raw -echo; printf '\\033[c'; response=$(dd bs=1 count=9 2>/dev/null | od -An -t x1); stty sane; printf 'response:%s\\n' \"$response\""],
+    { watch: false },
+  );
+  try {
+    session.start();
+    await waitForStatus(session, "exited");
+
+    expect(session.snapshot()).toMatch(/response:\s+1b\s+5b\s+3f\s+36\s+32\s+3b\s+32\s+32\s+63/);
+  } finally {
+    session.dispose();
+  }
+});

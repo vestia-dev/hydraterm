@@ -36,7 +36,7 @@ jobs:
           file native/darwin-arm64/libghostty-vt.dylib
           # Confirm the symbols our bun:ffi layer binds against are exported.
           nm -gU native/darwin-arm64/libghostty-vt.dylib | grep -E \
-            'ghostty_terminal_new|ghostty_terminal_vt_write|ghostty_formatter_format_alloc' \
+            'ghostty_terminal_new|ghostty_terminal_set|ghostty_terminal_vt_write|ghostty_formatter_format_alloc' \
             || (echo "expected exports missing" && exit 1)
 
       - uses: actions/upload-artifact@v4

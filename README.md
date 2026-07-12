@@ -5,7 +5,8 @@ OpenTUI dashboard work.
 
 A Bun-native terminal process dashboard: auto-detects npm scripts, runs
 them together, restarts on file change, and lets you navigate between
-them as full-fidelity terminal panes (built on Ghostty's VT engine).
+them as terminal panes backed by Ghostty's VT engine. See [fidelity limits](docs/fidelity.md)
+for the current parser and renderer boundary.
 
 To install dependencies:
 

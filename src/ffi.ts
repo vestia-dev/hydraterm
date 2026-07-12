@@ -1,8 +1,9 @@
-import { dlopen, ptr, read, type Pointer } from "bun:ffi";
+import { dlopen, JSCallback, ptr, read, toArrayBuffer, type Pointer } from "bun:ffi";
 
 /** The public libghostty-vt result codes used by this wrapper. */
 const GHOSTTY_SUCCESS = 0;
 const GHOSTTY_OUT_OF_SPACE = -3;
+const GHOSTTY_TERMINAL_OPT_WRITE_PTY = 1;
 
 const libraryPath = new URL("../native/darwin-arm64/libghostty-vt.dylib", import.meta.url).pathname;
 
@@ -18,6 +19,7 @@ const library = dlopen(libraryPath, {
   // so its two ABI words are declared explicitly here.
   ghostty_terminal_new: { args: ["ptr", "ptr", "u64", "u64"], returns: "i32" },
   ghostty_terminal_free: { args: ["ptr"], returns: "void" },
+  ghostty_terminal_set: { args: ["ptr", "u32", "ptr"], returns: "i32" },
   ghostty_terminal_resize: { args: ["ptr", "u16", "u16", "u32", "u32"], returns: "i32" },
   ghostty_terminal_vt_write: { args: ["ptr", "ptr", "usize"], returns: "void" },
 
@@ -62,16 +64,20 @@ function packTerminalOptions(cols: number, rows: number, maxScrollback: number):
   return [BigInt(cols) | (BigInt(rows) << 16n), BigInt(maxScrollback)];
 }
 
-function plainFormatterOptions(): Uint8Array {
+function formatterOptions(emit: number, styled = false): Uint8Array {
   // GhosttyFormatterTerminalOptions is 56 bytes on 64-bit Darwin:
   // size_t size; int emit; bool unwrap; bool trim; padding;
   // GhosttyFormatterTerminalExtra extra; GhosttySelection *selection.
   const bytes = new Uint8Array(56);
   const view = new DataView(bytes.buffer);
   view.setBigUint64(0, 56n, true);
-  view.setUint32(8, 0, true); // GHOSTTY_FORMATTER_FORMAT_PLAIN
+  view.setUint32(8, emit, true);
   view.setBigUint64(16, 32n, true); // GhosttyFormatterTerminalExtra.size
   view.setBigUint64(32, 16n, true); // GhosttyFormatterScreenExtra.size
+  if (styled) {
+    view.setUint8(41, 1); // GhosttyFormatterScreenExtra.style
+    view.setUint8(42, 1); // GhosttyFormatterScreenExtra.hyperlink
+  }
   return bytes;
 }
 
@@ -80,8 +86,11 @@ function plainFormatterOptions(): Uint8Array {
  * formatter. Feed it raw PTY bytes, then call snapshot() for its screen view.
  */
 export class GhosttyTerminal {
-  #terminal: NativeHandle | null;
-  #formatter: NativeHandle | null;
+  #terminal: NativeHandle | null = null;
+  #formatter: NativeHandle | null = null;
+  #styledFormatter: NativeHandle | null = null;
+  #writeTarget: ((data: Uint8Array) => void) | null = null;
+  #writePtyCallback: JSCallback;
 
   constructor({ cols = 80, rows = 24, maxScrollback = 10_000 }: GhosttyTerminalOptions = {}) {
     const terminalOut = new BigUint64Array(1);
@@ -91,10 +100,28 @@ export class GhosttyTerminal {
       "ghostty_terminal_new",
     );
     this.#terminal = pointerFrom(terminalOut, "ghostty_terminal_new");
+    this.#writePtyCallback = new JSCallback(
+      (_terminal, _userdata, data, length) => {
+        const target = this.#writeTarget;
+        if (target === null || length === 0n) return;
+
+        // Ghostty only lends these bytes for this synchronous callback.
+        target(Uint8Array.from(new Uint8Array(toArrayBuffer(data, 0, Number(length)))));
+      },
+      { args: ["ptr", "ptr", "ptr", "usize"], returns: "void" },
+    );
 
     try {
+      check(
+        library.symbols.ghostty_terminal_set(
+          this.#terminal,
+          GHOSTTY_TERMINAL_OPT_WRITE_PTY,
+          this.#writePtyCallback.ptr,
+        ),
+        "ghostty_terminal_set WRITE_PTY",
+      );
       const formatterOut = new BigUint64Array(1);
-      const options = plainFormatterOptions();
+      const options = formatterOptions(0); // GHOSTTY_FORMATTER_FORMAT_PLAIN
       check(
         library.symbols.ghostty_formatter_terminal_new(
           null,
@@ -105,8 +132,24 @@ export class GhosttyTerminal {
         "ghostty_formatter_terminal_new",
       );
       this.#formatter = pointerFrom(formatterOut, "ghostty_formatter_terminal_new");
+
+      const styledFormatterOut = new BigUint64Array(1);
+      const styledOptions = formatterOptions(2, true); // GHOSTTY_FORMATTER_FORMAT_HTML
+      check(
+        library.symbols.ghostty_formatter_terminal_new(
+          null,
+          ptr(styledFormatterOut),
+          this.#terminal,
+          ptr(styledOptions),
+        ),
+        "ghostty_formatter_terminal_new styled",
+      );
+      this.#styledFormatter = pointerFrom(styledFormatterOut, "ghostty_formatter_terminal_new styled");
     } catch (error) {
-      library.symbols.ghostty_terminal_free(this.#terminal);
+      if (this.#styledFormatter !== null) library.symbols.ghostty_formatter_free(this.#styledFormatter);
+      if (this.#formatter !== null) library.symbols.ghostty_formatter_free(this.#formatter);
+      this.#writePtyCallback.close();
+      library.symbols.ghostty_terminal_free(this.#getTerminal());
       this.#terminal = null;
       throw error;
     }
@@ -116,6 +159,12 @@ export class GhosttyTerminal {
     const bytes = typeof data === "string" ? new TextEncoder().encode(data) : data;
     if (bytes.byteLength === 0) return;
     library.symbols.ghostty_terminal_vt_write(this.#getTerminal(), ptr(bytes), BigInt(bytes.byteLength));
+  }
+
+  /** Route terminal-generated query responses to the current PTY writer. */
+  setWriteTarget(target: ((data: Uint8Array) => void) | null): void {
+    this.#getTerminal();
+    this.#writeTarget = target;
   }
 
   resize(cols: number, rows: number, cellWidthPx = 0, cellHeightPx = 0): void {
@@ -133,7 +182,15 @@ export class GhosttyTerminal {
 
   /** Return Ghostty's current active-screen contents, with terminal control codes removed. */
   snapshot(): string {
-    const formatter = this.#getFormatter();
+    return this.#format(this.#getFormatter());
+  }
+
+  /** Return the current active screen as styled HTML for rendering. */
+  styledSnapshot(): string {
+    return this.#format(this.#getStyledFormatter());
+  }
+
+  #format(formatter: NativeHandle): string {
     const lengthOut = new BigUint64Array(1);
     const result = library.symbols.ghostty_formatter_format_buf(
       formatter,
@@ -159,14 +216,24 @@ export class GhosttyTerminal {
   }
 
   dispose(): void {
+    if (this.#styledFormatter !== null) {
+      library.symbols.ghostty_formatter_free(this.#styledFormatter);
+      this.#styledFormatter = null;
+    }
     if (this.#formatter !== null) {
       library.symbols.ghostty_formatter_free(this.#formatter);
       this.#formatter = null;
     }
     if (this.#terminal !== null) {
+      this.#writeTarget = null;
+      check(
+        library.symbols.ghostty_terminal_set(this.#terminal, GHOSTTY_TERMINAL_OPT_WRITE_PTY, null),
+        "ghostty_terminal_set WRITE_PTY",
+      );
       library.symbols.ghostty_terminal_free(this.#terminal);
       this.#terminal = null;
     }
+    this.#writePtyCallback.close();
   }
 
   [Symbol.dispose](): void {
@@ -181,6 +248,11 @@ export class GhosttyTerminal {
   #getFormatter(): NativeHandle {
     if (this.#formatter === null) throw new Error("GhosttyTerminal has been disposed.");
     return this.#formatter;
+  }
+
+  #getStyledFormatter(): NativeHandle {
+    if (this.#styledFormatter === null) throw new Error("GhosttyTerminal has been disposed.");
+    return this.#styledFormatter;
   }
 }
 

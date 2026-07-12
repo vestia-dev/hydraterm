@@ -11,6 +11,7 @@ export interface TerminalSession {
   readonly watchEnabled: boolean;
   readonly watchPending: boolean;
   snapshot(): string;
+  styledSnapshot(): string;
   start(): void;
   restart(): void;
   toggleWatch(): void;
@@ -65,7 +66,7 @@ export class PtySession implements TerminalSession {
     const run = ++this.#run;
     this.#stopRequestedRun = null;
     const terminal = this.terminal;
-    this.#pty = new Bun.Terminal({
+    const pty = new Bun.Terminal({
       cols: this.#cols,
       rows: this.#rows,
       data: (_pty, data) => {
@@ -75,7 +76,9 @@ export class PtySession implements TerminalSession {
       },
       exit: () => this.#notify(),
     });
-    this.#child = Bun.spawn(this.#shell ? ["/bin/sh", "-lc", this.command[0] ?? ""] : [...this.command], { terminal: this.#pty, cwd: this.#cwd, env: this.#env });
+    this.#pty = pty;
+    terminal.setWriteTarget((data) => pty.write(data));
+    this.#child = Bun.spawn(this.#shell ? ["/bin/sh", "-lc", this.command[0] ?? ""] : [...this.command], { terminal: pty, cwd: this.#cwd, env: this.#env });
     this.status = "running";
     this.#notify();
 
@@ -129,6 +132,10 @@ export class PtySession implements TerminalSession {
 
   snapshot(): string {
     return this.terminal.snapshot();
+  }
+
+  styledSnapshot(): string {
+    return this.terminal.styledSnapshot();
   }
 
   stop(): void {
