@@ -9,6 +9,8 @@ import type { ProcessStatus, TerminalSession } from "../src/session";
 class FakeSession implements TerminalSession {
   status: ProcessStatus = "idle";
   exitCode: number | null = null;
+  watchEnabled = true;
+  watchPending = false;
   readonly inputs: string[] = [];
   readonly sizes: Array<[number, number]> = [];
   starts = 0;
@@ -33,6 +35,9 @@ class FakeSession implements TerminalSession {
     this.status = "idle";
     this.exitCode = null;
     this.start();
+  }
+  toggleWatch(): void {
+    this.watchEnabled = !this.watchEnabled;
   }
   stop(): void {
     if (this.status !== "running") return;
@@ -94,6 +99,10 @@ test("React dashboard uses j/k navigation and routes focused output input to the
     });
     expect(second.restarts).toBe(1);
     expect(second.starts).toBe(2);
+    await act(async () => {
+      setup.mockInput.pressKey("w");
+    });
+    expect(second.watchEnabled).toBe(false);
     await act(async () => {
       setup.mockInput.pressKey("s");
     });

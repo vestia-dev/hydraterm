@@ -45,7 +45,8 @@ function useSessionUpdate(session: TerminalSession): void {
 function ProcessRow({ session, selected }: { session: TerminalSession; selected: boolean }) {
   useSessionUpdate(session);
 
-  const detail = session.exitCode === null ? session.status : `${session.status} (${session.exitCode})`;
+  const processDetail = session.exitCode === null ? session.status : `${session.status} (${session.exitCode})`;
+  const detail = `${processDetail} · watch ${session.watchEnabled ? (session.watchPending ? "pending" : "on") : "off"}`;
   return (
     <text
       height={1}
@@ -134,6 +135,11 @@ export function DashboardView({ sessions, onQuit }: { sessions: readonly Termina
         sessions[selected]?.restart();
         return;
       }
+      if (key.name === "w" && !key.ctrl && !key.meta && !key.option) {
+        key.preventDefault();
+        sessions[selected]?.toggleWatch();
+        return;
+      }
       if (key.name === "p" && !key.ctrl && !key.meta && !key.option) {
         key.preventDefault();
         for (const session of sessions) session.stop();
@@ -177,7 +183,7 @@ export function DashboardView({ sessions, onQuit }: { sessions: readonly Termina
       </box>
       <text
         height={1}
-        content={mode === "navigation" ? "j/k select · s start/stop · a start all · p stop all · r restart · Enter focus output · q quit" : "j/k scroll output · Esc navigation · Ctrl-C interrupt selected process"}
+        content={mode === "navigation" ? "j/k select · s start/stop · a start all · p stop all · r restart · w watch · Enter focus output · q quit" : "j/k scroll output · Esc navigation · Ctrl-C interrupt selected process"}
         fg="#94a3b8"
         bg="#1e293b"
       />

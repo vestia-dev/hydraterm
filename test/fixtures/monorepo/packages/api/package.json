@@ -1,0 +1,8 @@
+{
+  "name": "@fixture/api",
+  "scripts": {
+    "build": "api-build",
+    "dev": "api-dev",
+    "postbuild": "api-postbuild"
+  }
+}

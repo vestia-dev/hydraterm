@@ -39,3 +39,33 @@ test("restarts a failed PTY process with a fresh terminal state", async () => {
     session.dispose();
   }
 });
+
+test("runs a process from its configured working directory", async () => {
+  const cwd = "/tmp";
+  const session = new PtySession("pwd", ["/bin/sh", "-c", "pwd"], { cwd });
+  try {
+    session.start();
+    await waitForStatus(session, "exited");
+    expect(session.snapshot()).toContain(cwd);
+  } finally {
+    session.dispose();
+  }
+});
+
+test("runs configured process commands through a shell with their environment", async () => {
+  const cwd = "/tmp";
+  const session = new PtySession("configured", ["printf '%s:%s' \"$PORT\" \"$PWD\""], {
+    cwd,
+    env: { PORT: "3002" },
+    shell: true,
+    watch: false,
+  });
+  try {
+    session.start();
+    await waitForStatus(session, "exited");
+    expect(session.snapshot()).toContain("3002:");
+    expect(session.snapshot()).toContain("tmp");
+  } finally {
+    session.dispose();
+  }
+});

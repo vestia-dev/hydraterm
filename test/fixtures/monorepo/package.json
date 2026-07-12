@@ -1,0 +1,11 @@
+{
+  "name": "fixture-root",
+  "private": true,
+  "workspaces": ["packages/*", "apps/*", "**"],
+  "scripts": {
+    "dev": "root-dev",
+    "lint": "root-lint",
+    "prebuild": "root-prebuild",
+    "typecheck": "root-typecheck"
+  }
+}

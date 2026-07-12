@@ -1,0 +1,19 @@
+{
+  "name": "process-fixture",
+  "hydraterm": {
+    "processes": {
+      "API": {
+        "command": "bun run dev:api",
+        "workingDir": "packages/functions",
+        "restartWhenChanged": ["packages/functions/**", "packages/data/**"],
+        "autoStart": true,
+        "env": { "PORT": "3002" }
+      },
+      "Web": {
+        "command": "bun run dev",
+        "workingDir": "packages/web",
+        "restartWhenChanged": []
+      }
+    }
+  }
+}
