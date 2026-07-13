@@ -23,6 +23,14 @@ function waitForStatus(session: PtySession, status: "running" | "failed" | "exit
   });
 }
 
+async function waitFor(check: () => boolean): Promise<void> {
+  const deadline = Date.now() + 1_000;
+  while (!check()) {
+    if (Date.now() >= deadline) throw new Error("Timed out waiting for condition.");
+    await Bun.sleep(10);
+  }
+}
+
 test("restarts a failed PTY process with a fresh terminal state", async () => {
   const session = new PtySession("fails", ["/bin/sh", "-c", "printf 'attempt\\r\\n'; sleep 0.05; exit 1"]);
   try {
@@ -67,6 +75,35 @@ test("runs configured process commands through a shell with their environment", 
     expect(session.snapshot()).toContain("tmp");
   } finally {
     session.dispose();
+  }
+});
+
+test("stops descendants spawned by a configured shell", async () => {
+  const session = new PtySession("descendant", ["sleep 60 & printf '%s\\n' \"$!\"; wait"], { shell: true, watch: false });
+  let childPid: number | undefined;
+  try {
+    session.start();
+    await waitFor(() => /^\d+$/.test(session.snapshot().trim()));
+    childPid = Number(session.snapshot().trim());
+    const pid = childPid;
+
+    session.stop();
+
+    await waitFor(() => {
+      const state = Bun.spawnSync(["ps", "-o", "stat=", "-p", String(pid)], { stdout: "pipe", stderr: "ignore" });
+      const status = state.stdout.toString().trim();
+      return status === "" || status.startsWith("Z");
+    });
+    session.dispose();
+  } finally {
+    session.dispose();
+    if (childPid !== undefined) {
+      try {
+        process.kill(childPid, "SIGKILL");
+      } catch {
+        // The expected path is that session disposal has already stopped it.
+      }
+    }
   }
 });
 

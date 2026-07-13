@@ -34,6 +34,7 @@ export class PtySession implements TerminalSession {
   #rows: number;
   #run = 0;
   #restarting = false;
+  #stopping: Promise<void> | null = null;
   #stopRequestedRun: number | null = null;
   #cwd: string | undefined;
   #env: Record<string, string> | undefined;
@@ -143,7 +144,7 @@ export class PtySession implements TerminalSession {
     this.#stopRequestedRun = this.#run;
     this.status = "stopped";
     this.#notify();
-    this.#child?.kill();
+    this.#stopping = this.#terminateProcessTree(this.#child?.pid);
   }
 
   subscribe(listener: () => void): () => void {
@@ -177,11 +178,30 @@ export class PtySession implements TerminalSession {
     this.#watcher.start();
   }
 
+  async #terminateProcessTree(pid: number | undefined): Promise<void> {
+    if (pid === undefined) return;
+
+    const search = Bun.spawn(["pgrep", "-P", String(pid)], { stdout: "pipe", stderr: "ignore" });
+    const output = await new Response(search.stdout).text();
+    await search.exited;
+    const descendants = (output.trim() === "" ? [] : output.trim().split("\n"))
+      .map(Number)
+      .filter(Number.isSafeInteger);
+    await Promise.all(descendants.map((descendant) => this.#terminateProcessTree(descendant)));
+
+    try {
+      process.kill(pid, "SIGTERM");
+    } catch {
+      // The process may have exited while its descendants were being stopped.
+    }
+  }
+
   async #restart(): Promise<void> {
     const previousChild = this.#child;
     this.#run++;
     this.#stopRequestedRun = null;
-    if (this.status === "running") previousChild?.kill();
+    if (previousChild?.exitCode === null) await (this.#stopping ?? this.#terminateProcessTree(previousChild.pid));
+    this.#stopping = null;
     if (previousChild) await previousChild.exited;
 
     this.#pty?.close();
