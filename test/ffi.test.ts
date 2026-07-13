@@ -16,7 +16,7 @@ test("formats raw PTY redraws as their final screen state", async () => {
         terminal.write(data);
       },
     });
-    const child = Bun.spawn([process.execPath, "run", "--silent", "demo:spinner"], {
+    const child = Bun.spawn(["/bin/sh", "-c", "printf '\\r\\033[2K⠋ Building\\r\\033[2K⠹ Done\\n'"], {
       terminal: pty,
     });
     await child.exited;
