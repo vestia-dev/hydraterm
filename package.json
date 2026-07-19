@@ -1,6 +1,6 @@
 {
   "name": "hydraterm",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "A Bun-native terminal process dashboard with real VT fidelity. Early work in progress.",
   "repository": {
     "type": "git",
