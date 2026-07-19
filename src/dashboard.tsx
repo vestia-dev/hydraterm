@@ -3,9 +3,8 @@ import { BoxRenderable, createCliRenderer, RGBA, StyledText, TextAttributes, typ
 import { createRoot, useKeyboard, useRenderer } from "@opentui/react";
 import { useEffect, useRef, useState, type RefObject } from "react";
 import type { TerminalSession } from "./session";
+import { detectTerminalTheme, FALLBACK_TERMINAL_THEME, type TerminalTheme } from "./theme";
 
-const ACTIVE_BORDER = "#7dd3fc";
-const IDLE_BORDER = "#475569";
 const NAV_WIDTH = 28;
 
 interface TerminalStyle {
@@ -292,7 +291,7 @@ function useSessionUpdate(session: TerminalSession): void {
   useEffect(() => session.subscribe(() => setVersion((version) => version + 1)), [session]);
 }
 
-function ProcessRow({ session, selected }: { session: TerminalSession; selected: boolean }) {
+function ProcessRow({ session, selected, theme }: { session: TerminalSession; selected: boolean; theme: TerminalTheme }) {
   useSessionUpdate(session);
 
   const processDetail = session.exitCode === null ? session.status : `${session.status} (${session.exitCode})`;
@@ -301,8 +300,8 @@ function ProcessRow({ session, selected }: { session: TerminalSession; selected:
     <text
       height={1}
       content={`${selected ? "›" : " "} ${session.name}  ${detail}`}
-      fg={selected ? "#f8fafc" : "#94a3b8"}
-      bg={selected ? "#0c4a6e" : "#0f172a"}
+      fg={selected ? theme.background : theme.foreground}
+      bg={selected ? theme.active : theme.background}
       truncate
     />
   );
@@ -313,11 +312,13 @@ function OutputPane({
   focused,
   scrollRef,
   onOpenLink,
+  theme,
 }: {
   session: TerminalSession;
   focused: boolean;
   scrollRef: RefObject<ScrollBoxRenderable | null>;
   onOpenLink: (url: string) => void;
+  theme: TerminalTheme;
 }) {
   useSessionUpdate(session);
 
@@ -328,9 +329,9 @@ function OutputPane({
       flexGrow={1}
       border
       borderStyle="rounded"
-      borderColor={focused ? ACTIVE_BORDER : IDLE_BORDER}
+      borderColor={focused ? theme.active : theme.border}
       title={` ${focused ? "● output" : "○ output"} · ${session.name} · ${detail} `}
-      titleColor="#cbd5e1"
+      titleColor={theme.foreground}
       paddingX={1}
       paddingY={0}
       onSizeChange={function (this: BoxRenderable) {
@@ -359,7 +360,7 @@ function OutputPane({
           id="process-output-text"
           width="100%"
           content={output}
-          fg="#e2e8f0"
+          fg={theme.foreground}
           wrapMode="none"
         />
       </scrollbox>
@@ -367,7 +368,7 @@ function OutputPane({
   );
 }
 
-export function DashboardView({ sessions, onQuit, onOpenLink = openHyperlink }: { sessions: readonly TerminalSession[]; onQuit: () => void; onOpenLink?: (url: string) => void }) {
+export function DashboardView({ sessions, onQuit, onOpenLink = openHyperlink, theme = FALLBACK_TERMINAL_THEME }: { sessions: readonly TerminalSession[]; onQuit: () => void; onOpenLink?: (url: string) => void; theme?: TerminalTheme }) {
   const renderer = useRenderer();
   const [selected, setSelected] = useState(0);
   const [mode, setMode] = useState<"navigation" | "output">("navigation");
@@ -438,22 +439,21 @@ export function DashboardView({ sessions, onQuit, onOpenLink = openHyperlink }: 
 
   const selectedSession = sessions[selected];
   return (
-    <box width="100%" height="100%" flexDirection="column" backgroundColor="#0f172a">
-      <text height={1} content={` hydraterm  ·  ${sessions.length} process${sessions.length === 1 ? "" : "es"}`} fg="#e2e8f0" bg="#1e293b" />
-      <box flexGrow={1} flexDirection="row" backgroundColor="#0f172a">
-        <box width={NAV_WIDTH} border borderStyle="rounded" borderColor={mode === "navigation" ? ACTIVE_BORDER : IDLE_BORDER} title=" processes " paddingY={0}>
+    <box width="100%" height="100%" flexDirection="column" backgroundColor={theme.background}>
+      <box flexGrow={1} flexDirection="row" backgroundColor={theme.background}>
+        <box width={NAV_WIDTH} border borderStyle="rounded" borderColor={mode === "navigation" ? theme.active : theme.border} title=" processes " paddingY={0}>
           {sessions.map((session, index) => (
-            <ProcessRow key={`${session.name}:${index}`} session={session} selected={index === selected} />
+            <ProcessRow key={`${session.name}:${index}`} session={session} selected={index === selected} theme={theme} />
           ))}
         </box>
         <box width={1} />
-        {selectedSession && <OutputPane key={`${selected}:${selectedSession.name}`} session={selectedSession} focused={mode === "output"} scrollRef={outputScroll} onOpenLink={onOpenLink} />}
+        {selectedSession && <OutputPane key={`${selected}:${selectedSession.name}`} session={selectedSession} focused={mode === "output"} scrollRef={outputScroll} onOpenLink={onOpenLink} theme={theme} />}
       </box>
       <text
         height={1}
         content={mode === "navigation" ? "j/k select · s start/stop · a start all · p stop all · r restart · w watch · Enter focus output · q quit" : "j/k scroll output · Esc navigation · Ctrl-C interrupt selected process"}
-        fg="#94a3b8"
-        bg="#1e293b"
+        fg={theme.foreground}
+        bg={theme.surface}
       />
     </box>
   );
@@ -478,8 +478,9 @@ export class Dashboard {
       targetFps: 30,
       useMouse: true,
     });
+    const theme = await detectTerminalTheme(renderer);
     const dashboard = new Dashboard(renderer, sessions);
-    createRoot(renderer).render(<DashboardView sessions={sessions} onQuit={() => renderer.destroy()} />);
+    createRoot(renderer).render(<DashboardView sessions={sessions} onQuit={() => renderer.destroy()} theme={theme} />);
     return dashboard;
   }
 

@@ -5,6 +5,16 @@ import { testRender } from "@opentui/react/test-utils";
 import { act } from "react";
 import { DashboardView, styledTerminalOutput } from "../src/dashboard";
 import type { ProcessStatus, TerminalSession } from "../src/session";
+import type { TerminalTheme } from "../src/theme";
+
+const theme: TerminalTheme = {
+  background: RGBA.fromIndex(0),
+  foreground: RGBA.fromIndex(7),
+  muted: RGBA.fromIndex(8),
+  surface: RGBA.fromIndex(0),
+  active: RGBA.fromIndex(6),
+  border: RGBA.fromIndex(8),
+};
 
 class FakeSession implements TerminalSession {
   status: ProcessStatus = "idle";
@@ -115,7 +125,7 @@ test("opens a clicked output hyperlink while keeping output text selectable", as
   const session = new FakeSession("web", ["web"]);
   session.setScreen('<div style="font-family: monospace;"><a href="https://example.com">link</a></div>');
   const opened: string[] = [];
-  const setup = await testRender(<DashboardView sessions={[session]} onQuit={() => {}} onOpenLink={(url) => opened.push(url)} />, {
+  const setup = await testRender(<DashboardView sessions={[session]} onQuit={() => {}} onOpenLink={(url) => opened.push(url)} theme={theme} />, {
     width: 80,
     height: 20,
     exitOnCtrlC: false,
@@ -140,7 +150,7 @@ test("React dashboard uses j/k navigation and routes focused output input to the
   const first = new FakeSession("api", ["api"]);
   const second = new FakeSession("web", ["web"]);
   let quit = false;
-  const setup = await testRender(<DashboardView sessions={[first, second]} onQuit={() => { quit = true; }} />, {
+  const setup = await testRender(<DashboardView sessions={[first, second]} onQuit={() => { quit = true; }} theme={theme} />, {
     width: 80,
     height: 20,
     exitOnCtrlC: false,
@@ -149,7 +159,7 @@ test("React dashboard uses j/k navigation and routes focused output input to the
 
   try {
     await setup.flush();
-    expect(setup.captureCharFrame()).toContain("hydraterm");
+    expect(setup.captureCharFrame()).toContain("processes");
     expect(setup.captureCharFrame()).toContain("ready");
     await act(async () => {
       setup.mockInput.pressKey("a");

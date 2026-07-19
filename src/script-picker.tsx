@@ -3,11 +3,13 @@ import { createCliRenderer, type CliRenderer } from "@opentui/core";
 import { createRoot, useKeyboard } from "@opentui/react";
 import { useState } from "react";
 import { scriptLabel, type PackageScript } from "./scripts";
+import { detectTerminalTheme, FALLBACK_TERMINAL_THEME, type TerminalTheme } from "./theme";
 
-export function ScriptPickerView({ scripts, onConfirm, onCancel }: {
+export function ScriptPickerView({ scripts, onConfirm, onCancel, theme = FALLBACK_TERMINAL_THEME }: {
   scripts: readonly PackageScript[];
   onConfirm: (scripts: PackageScript[]) => void;
   onCancel: () => void;
+  theme?: TerminalTheme;
 }) {
   const [cursor, setCursor] = useState(0);
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -34,12 +36,12 @@ export function ScriptPickerView({ scripts, onConfirm, onCancel }: {
       onConfirm([...selected].map((index) => scripts[index]).filter((script): script is PackageScript => script !== undefined));
     }
   });
-  return <box width="100%" height="100%" flexDirection="column" backgroundColor="#0f172a" paddingX={1}>
-    <text height={1} content=" Select scripts " fg="#e2e8f0" bg="#1e293b" />
+  return <box width="100%" height="100%" flexDirection="column" backgroundColor={theme.background} paddingX={1}>
+    <text height={1} content=" Select scripts " fg={theme.foreground} bg={theme.surface} />
     <box flexGrow={1} flexDirection="column">
-      {scripts.map((script, index) => <text key={`${script.packageRoot}:${script.scriptName}`} height={1} content={`${index === cursor ? "›" : " "} ${selected.has(index) ? "[x]" : "[ ]"} ${scriptLabel(script)}  ${script.command}`} fg={index === cursor ? "#f8fafc" : "#94a3b8"} bg={index === cursor ? "#0c4a6e" : "#0f172a"} truncate />)}
+      {scripts.map((script, index) => <text key={`${script.packageRoot}:${script.scriptName}`} height={1} content={`${index === cursor ? "›" : " "} ${selected.has(index) ? "[x]" : "[ ]"} ${scriptLabel(script)}  ${script.command}`} fg={index === cursor ? theme.background : theme.foreground} bg={index === cursor ? theme.active : theme.background} truncate />)}
     </box>
-    <text height={1} content="j/k move · Space toggle · a select all · Enter start · q cancel" fg="#94a3b8" bg="#1e293b" />
+    <text height={1} content="j/k move · Space toggle · a select all · Enter start · q cancel" fg={theme.foreground} bg={theme.surface} />
   </box>;
 }
 
@@ -53,8 +55,9 @@ export class ScriptPicker {
 
   static async select(scripts: readonly PackageScript[]): Promise<PackageScript[] | null> {
     const renderer = await createCliRenderer({ exitOnCtrlC: false, consoleMode: "disabled", targetFps: 30 });
+    const theme = await detectTerminalTheme(renderer);
     const picker = new ScriptPicker(renderer, scripts);
-    createRoot(renderer).render(<ScriptPickerView scripts={scripts} onConfirm={(selected) => picker.#finish(selected)} onCancel={() => picker.#finish(null)} />);
+    createRoot(renderer).render(<ScriptPickerView scripts={scripts} onConfirm={(selected) => picker.#finish(selected)} onCancel={() => picker.#finish(null)} theme={theme} />);
     return picker.#result.promise;
   }
 
