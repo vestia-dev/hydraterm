@@ -21,8 +21,9 @@ then saves the selection as named processes in the root `package.json`:
 hydraterm
 ```
 
-After configuration exists, Hydraterm starts its auto-starting processes. Pass a process
-name to start only that process, or use `--all` to start every configured process.
+After configuration exists, Hydraterm shows every configured process and starts those with
+`autoStart` enabled. Pass a process name to start only that process (while still showing
+the others), or use `--all` to start every configured process.
 `--root <path>` chooses a starting directory. `--no-watch` disables automatic restarts,
 while `--watch-debounce <ms>` changes the default 150ms debounce.
 
@@ -41,8 +42,9 @@ Hydraterm runs only named processes in the root `package.json`; it never starts 
 discovered workspace script until it has been saved to this configuration. Commands run
 through the system shell, so they support the same command syntax as Solo. `workingDir`
 and `restartWhenChanged` are relative to the repository root; an empty or omitted change
-list disables watching for that process. Processes auto-start unless `autoStart` is set
-to `false`.
+list disables watching for that process. All configured processes appear in the dashboard;
+those with `autoStart: false` remain idle until started manually. Processes auto-start
+unless `autoStart` is set to `false`.
 
 ```json
 {

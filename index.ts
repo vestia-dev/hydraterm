@@ -38,17 +38,20 @@ for (let index = 0; index < args.length; index++) {
 const configured = await discoverConfiguredProcesses({ root });
 let scripts;
 if (configured) {
-  scripts = names.length > 0
-    ? resolveScriptNames(configured, names)
-    : all
-      ? configured
-      : configured.filter((process) => process.autoStart);
+  scripts = configured;
 } else {
   const discovered = await discoverScripts({ root });
   scripts = await ScriptPicker.select(discovered);
   if (scripts?.length) await saveConfiguredProcesses(scripts, { root });
 }
 if (!scripts || scripts.length === 0) process.exit(0);
+const startOnLaunch = new Set(configured
+  ? names.length > 0
+    ? resolveScriptNames(configured, names)
+    : all
+      ? configured
+      : configured.filter((process) => process.autoStart)
+  : scripts);
 
 const sessions = scripts.map(
   (script) => new PtySession(scriptLabel(script), script.shell ? [script.command] : [process.execPath, "run", "--silent", script.scriptName], {
@@ -59,4 +62,7 @@ const sessions = scripts.map(
   }),
 );
 const dashboard = await Dashboard.create(sessions);
+for (const [index, script] of scripts.entries()) {
+  if (startOnLaunch.has(script)) sessions[index]?.start();
+}
 await dashboard.closed;
