@@ -130,3 +130,4 @@ already exist on npm to configure a trusted publisher; bootstrap its first publi
 manually if necessary.
 
 This project was created using `bun init` in bun v1.3.11. [Bun](https://bun.com) is a fast all-in-one JavaScript runtime.
+test
