@@ -6,6 +6,8 @@ export type ProcessStatus = "idle" | "running" | "stopped" | "exited" | "failed"
 export interface TerminalSession {
   readonly name: string;
   readonly command: readonly string[];
+  readonly cwd?: string;
+  readonly pid?: number | null;
   readonly status: ProcessStatus;
   readonly exitCode: number | null;
   readonly watchEnabled: boolean;
@@ -36,7 +38,7 @@ export class PtySession implements TerminalSession {
   #restarting = false;
   #stopping: Promise<void> | null = null;
   #stopRequestedRun: number | null = null;
-  #cwd: string | undefined;
+  readonly cwd: string | undefined;
   #env: Record<string, string> | undefined;
   #shell: boolean;
   #watchConfiguration: WatchConfiguration | false;
@@ -50,7 +52,7 @@ export class PtySession implements TerminalSession {
     if (command.length === 0) throw new Error("A terminal session needs a command.");
     this.#cols = cols;
     this.#rows = rows;
-    this.#cwd = cwd;
+    this.cwd = cwd;
     this.#env = env;
     this.#shell = shell;
     this.#watchConfiguration = watch === false ? false : { ...watch, root: watch.root ?? cwd ?? process.cwd() };
@@ -79,7 +81,7 @@ export class PtySession implements TerminalSession {
     });
     this.#pty = pty;
     terminal.setWriteTarget((data) => pty.write(data));
-    this.#child = Bun.spawn(this.#shell ? ["/bin/sh", "-lc", this.command[0] ?? ""] : [...this.command], { terminal: pty, cwd: this.#cwd, env: this.#env });
+    this.#child = Bun.spawn(this.#shell ? ["/bin/sh", "-lc", this.command[0] ?? ""] : [...this.command], { terminal: pty, cwd: this.cwd, env: this.#env });
     this.status = "running";
     this.#notify();
 
@@ -110,6 +112,10 @@ export class PtySession implements TerminalSession {
 
   get watchEnabled(): boolean {
     return this.#watcher?.enabled ?? this.#watchConfiguration !== false;
+  }
+
+  get pid(): number | null {
+    return this.#child?.pid ?? null;
   }
 
   get watchPending(): boolean {

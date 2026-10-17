@@ -59,7 +59,7 @@ async function readPackageJson(packageRoot: string): Promise<PackageJson | null>
   }
 }
 
-async function findPackageRoot(start: string): Promise<string> {
+export async function findPackageRoot(start: string): Promise<string> {
   let current = resolve(start);
   while (true) {
     if (await Bun.file(resolve(current, "package.json")).exists()) return current;

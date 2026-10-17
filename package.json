@@ -33,8 +33,10 @@
     "typescript": "^5"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "@opentui/core": "^0.4.3",
     "@opentui/react": "^0.4.3",
-    "react": "^19.2.7"
+    "react": "^19.2.7",
+    "zod": "^4.6.7"
   }
 }

@@ -33,6 +33,35 @@ hydraterm API
 hydraterm --watch-debounce 300 API
 ```
 
+Use headless mode when a terminal UI is unnecessary, such as when an agent owns the
+process supervisor and inspects it through MCP. It starts the same configured processes,
+PTYs, watchers, and inspection endpoint, and exits cleanly on SIGINT or SIGTERM:
+
+```bash
+hydraterm headless
+hydraterm headless --all
+```
+
+Use `--detach` to wait for readiness and return while the supervisor continues in the
+background. `ensure --headless` is the preferred agent command: it atomically reuses an
+existing project instance or starts one, so concurrent calls cannot duplicate processes.
+
+```bash
+hydraterm headless --detach
+hydraterm ensure --headless
+hydraterm status
+hydraterm stop
+```
+
+TUI and headless instances share a per-project lock based on the canonical project path.
+Only one can own a project at a time. The original `hydraterm --headless` spelling remains
+available as an alias.
+
+Running plain `hydraterm` while an instance already owns the project attaches a TUI to
+that instance instead of starting duplicate processes. The attached TUI displays the
+owner's styled terminal screens and forwards input, resize, watcher, and lifecycle actions.
+Exiting the attached TUI leaves the owning headless instance and its processes running.
+
 The first-run picker lists all discovered scripts, including lifecycle hooks and linting
 commands. Every selected script runs from its owning package directory.
 
@@ -88,6 +117,57 @@ select output copies it to the clipboard automatically; Cmd-C and Ctrl-Shift-C a
 the current selection when the terminal forwards those shortcuts.
 Esc returns to navigation, `r` restarts the selected process, `w` toggles its watcher,
 and `q` exits. Process rows show whether watching is on, off, or awaiting debounce.
+
+## Agent inspection with MCP
+
+Hydraterm exposes MCP tools for inspecting and controlling its configured processes:
+
+- `list_processes`
+- `get_process_output`
+- `wait_for_process_output`
+- `start_process`
+- `stop_process`
+- `restart_process`
+
+The MCP command infers the project from its working directory, so an MCP client should
+start it from the project it will inspect:
+
+```bash
+hydraterm mcp
+```
+
+For OpenCode V2, run this once from the project root:
+
+```bash
+opencode mcp add hydraterm -- hydraterm mcp
+opencode mcp list
+```
+
+The equivalent project configuration is:
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "servers": {
+      "hydraterm": {
+        "type": "local",
+        "command": ["hydraterm", "mcp"],
+        "cwd": "."
+      }
+    }
+  }
+}
+```
+
+The MCP server remains connected when no TUI or headless instance is running.
+`list_processes` explicitly returns `instanceStatus: "running" | "stopped"`, allowing an
+agent to call `hydraterm ensure --headless` and use the same MCP connection once startup
+completes. Use `hydraterm mcp --root /absolute/project/path` only when the MCP client cannot
+start the command from that project. The local inspection endpoint binds to loopback,
+authenticates with a per-run token stored in a user-only cache file, never exposes process
+environment variables, and limits returned output. Lifecycle tools require an exact
+configured process name and operate only through the authenticated project instance.
 
 Run the automated proof:
 
