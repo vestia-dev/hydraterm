@@ -83,7 +83,9 @@ every configured watcher.
 Each command runs in Bun's native PTY. Its raw output is fed to Ghostty's VT
 parser before OpenTUI renders it. In the process navigation, use `j`/`k` to
 select a process, then `s` to start/stop it (or `a` to start all and `p` to stop all), and Enter to focus its output. While focused, typing and
-Ctrl-C go to that process, while `j`/`k` scroll its retained output history.
+Ctrl-C go to that process, while `j`/`k` scroll its retained output history. Dragging to
+select output copies it to the clipboard automatically; Cmd-C and Ctrl-Shift-C also copy
+the current selection when the terminal forwards those shortcuts.
 Esc returns to navigation, `r` restarts the selected process, `w` toggles its watcher,
 and `q` exits. Process rows show whether watching is on, off, or awaiting debounce.
 

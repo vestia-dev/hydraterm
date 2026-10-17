@@ -146,6 +146,35 @@ test("opens a clicked output hyperlink while keeping output text selectable", as
   }
 });
 
+test("copies process output when selection completes", async () => {
+  const session = new FakeSession("web", ["web"]);
+  const copied: string[] = [];
+  const setup = await testRender(<DashboardView sessions={[session]} onQuit={() => {}} theme={theme} />, {
+    width: 80,
+    height: 20,
+    exitOnCtrlC: false,
+    kittyKeyboard: true,
+  });
+
+  try {
+    await setup.flush();
+    setup.renderer.copyToClipboardOSC52 = (text) => {
+      copied.push(text);
+      return true;
+    };
+
+    await act(async () => {
+      setup.renderer.emit("selection", { getSelectedText: () => "selected output" } as NonNullable<ReturnType<typeof setup.renderer.getSelection>>);
+    });
+
+    expect(copied).toEqual(["selected output"]);
+  } finally {
+    await act(async () => {
+      setup.renderer.destroy();
+    });
+  }
+});
+
 test("React dashboard uses j/k navigation and routes focused output input to the selected pane", async () => {
   const first = new FakeSession("api", ["api"]);
   const second = new FakeSession("web", ["web"]);

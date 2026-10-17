@@ -1,6 +1,6 @@
 /** @jsxImportSource @opentui/react */
 import { BoxRenderable, createCliRenderer, RGBA, StyledText, TextAttributes, type CliRenderer, type KeyEvent, type ScrollBoxRenderable, type TextChunk } from "@opentui/core";
-import { createRoot, useKeyboard, useRenderer } from "@opentui/react";
+import { createRoot, useKeyboard, useRenderer, useSelectionHandler } from "@opentui/react";
 import { useEffect, useRef, useState, type RefObject } from "react";
 import type { TerminalSession } from "./session";
 import { detectTerminalTheme, FALLBACK_TERMINAL_THEME, type TerminalTheme } from "./theme";
@@ -374,7 +374,21 @@ export function DashboardView({ sessions, onQuit, onOpenLink = openHyperlink, th
   const [mode, setMode] = useState<"navigation" | "output">("navigation");
   const outputScroll = useRef<ScrollBoxRenderable | null>(null);
 
+  useSelectionHandler((selection) => {
+    const selectedText = selection.getSelectedText();
+    if (selectedText) renderer.copyToClipboardOSC52(selectedText);
+  });
+
   useKeyboard((key) => {
+    if (key.name === "c" && (key.meta || (key.ctrl && key.shift))) {
+      const selectedText = renderer.getSelection()?.getSelectedText();
+      if (selectedText) {
+        key.preventDefault();
+        renderer.copyToClipboardOSC52(selectedText);
+        return;
+      }
+    }
+
     if (mode === "navigation") {
       if (key.name === "q" && !key.ctrl && !key.meta && !key.option) {
         key.preventDefault();
@@ -451,7 +465,7 @@ export function DashboardView({ sessions, onQuit, onOpenLink = openHyperlink, th
       </box>
       <text
         height={1}
-        content={mode === "navigation" ? "j/k select · s start/stop · a start all · p stop all · r restart · w watch · Enter focus output · q quit" : "j/k scroll output · Esc navigation · Ctrl-C interrupt selected process"}
+        content={mode === "navigation" ? "j/k select · s start/stop · a start all · p stop all · r restart · w watch · Enter focus output · q quit" : "j/k scroll · drag to copy · Esc navigation · Ctrl-C interrupt"}
         fg={theme.foreground}
         bg={theme.surface}
       />
